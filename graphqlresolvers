@@ -21,24 +21,30 @@ mutation CreateOTPManagerUser($input: CreateOTPManagerUserInput!) {
 
 createOTPManagerUser Mutation resolver req.vtl
 ===============================================
+#set($now = $util.time.nowISO8601())
+#set($fiveMinutesLater = $util.time.addMinutes($now, 5))
+
+#set($insertStatement = "
+  INSERT INTO OTPManagerUsers (
+    TimerStartTime, TimerEndTime, OTP, UserEmail, RetryAttempt, IsLocked, LockedDateTime, ResendOTPClick
+  ) VALUES (
+    '$now', '$fiveMinutesLater', SUBSTRING(MD5(RAND()) FROM 1 FOR 6), :userEmail, 0, false, null, :resendOTPClick
+  )
+")
+
 {
   "version": "2018-05-29",
   "statements": [
     {
-      "sql": "INSERT INTO OTPManagerUsers (TimerStartTime, TimerEndTime, OTP, UserEmail, RetryAttempt, IsLocked, LockedDateTime, ResendOTPClick) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      "parameters": [
-        $util.defaultIfNull($ctx.args.input.timerStartTime, $util.time.nowISO8601()),
-        $util.defaultIfNull($ctx.args.input.timerEndTime, $util.time.addMinutes($util.time.nowISO8601(), 5)),
-        SUBSTRING(MD5(RAND()) FROM 1 FOR 6), -- Generating a random OTP (You may need to adjust this)
-        $ctx.args.input.userEmail,
-        0,
-        false,
-        null,
-        $util.defaultIfNull($ctx.args.input.resendOTPClick, false)
-      ]
+      "sql": $insertStatement,
+      "parameters": {
+        "userEmail": $ctx.args.input.userEmail,
+        "resendOTPClick": $util.defaultIfNull($ctx.args.input.resendOTPClick, false)
+      }
     }
   ]
 }
+
 
 createOTPManagerUser Mutation resolver res.vtl
 ===============================================
