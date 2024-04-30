@@ -1,0 +1,84 @@
+GraphQL.schema 
+=======================
+type Subscription {
+  otpManagerUserCreated: OTPManagerUser
+}
+
+Mutations
+================
+mutation CreateOTPManagerUser($input: CreateOTPManagerUserInput!) {
+  createOTPManagerUser(input: $input) {
+    id
+    timerStartTime
+    timerEndTime
+    otp
+    userEmail
+    retryAttempt
+    isLocked
+    lockedDateTime
+  }
+}
+
+createOTPManagerUser Mutation resolver req.vtl
+===============================================
+{
+  "version": "2018-05-29",
+  "statements": [
+    {
+      "sql": "INSERT INTO OTPManagerUsers (TimerStartTime, TimerEndTime, OTP, UserEmail, RetryAttempt, IsLocked, LockedDateTime, ResendOTPClick) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "parameters": [
+        $util.defaultIfNull($ctx.args.input.timerStartTime, $util.time.nowISO8601()),
+        $util.defaultIfNull($ctx.args.input.timerEndTime, $util.time.addMinutes($util.time.nowISO8601(), 5)),
+        SUBSTRING(MD5(RAND()) FROM 1 FOR 6), -- Generating a random OTP (You may need to adjust this)
+        $ctx.args.input.userEmail,
+        0,
+        false,
+        null,
+        $util.defaultIfNull($ctx.args.input.resendOTPClick, false)
+      ]
+    }
+  ]
+}
+
+createOTPManagerUser Mutation resolver res.vtl
+===============================================
+$util.toJson($ctx.result)
+
+
+updateOTPManagerUser Mutation resolver req.vtl
+===============================================
+
+#set($now = $util.time.nowISO8601())
+#set($fiveMinutesLater = $util.time.addMinutes($now, 5))
+
+#set($updateParams = {
+  "userEmail": $util.defaultIfNull($ctx.args.input.userEmail, "")
+})
+
+#set($updateStatement = "
+  UPDATE OTPManagerUsers
+  SET
+    TimerStartTime = '$now',
+    TimerEndTime = '$fiveMinutesLater',
+    RetryAttempt = IFNULL(RetryAttempt, 0) + 1,
+    IsLocked = IFNULL(RetryAttempt, 0) + 1 >= 3,
+    LockedDateTime = IF(IFNULL(RetryAttempt, 0) + 1 >= 3, '$now', null)
+  WHERE
+    UserEmail = :userEmail
+")
+
+{
+  "version": "2018-05-29",
+  "statements": [
+    {
+      "sql": $updateStatement,
+      "parameters": $updateParams
+    }
+  ]
+}
+
+updateOTPManagerUser Mutation resolver res.vtl
+===============================================
+
+$util.toJson($response)
+
