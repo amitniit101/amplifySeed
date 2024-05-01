@@ -57,8 +57,16 @@ updateOTPManagerUser Mutation resolver req.vtl
 #set($now = $util.time.nowISO8601())
 #set($fiveMinutesLater = $util.time.addMinutes($now, 5))
 
+#set($resendOTPClicked = $ctx.args.input.resendOTPClicked)
+#set($otp = $ctx.args.input.otp)
+#set($userEmail = $ctx.args.input.userEmail)
+
+#set($retryAttemptIncrement = $resendOTPClicked ? 1 : 0)
+
 #set($updateParams = {
-  "userEmail": $util.defaultIfNull($ctx.args.input.userEmail, "")
+  "userEmail": $userEmail,
+  "resendOTPClicked": $resendOTPClicked,
+  "otp": $otp
 })
 
 #set($updateStatement = "
@@ -66,9 +74,10 @@ updateOTPManagerUser Mutation resolver req.vtl
   SET
     TimerStartTime = '$now',
     TimerEndTime = '$fiveMinutesLater',
-    RetryAttempt = IFNULL(RetryAttempt, 0) + 1,
-    IsLocked = IFNULL(RetryAttempt, 0) + 1 >= 3,
-    LockedDateTime = IF(IFNULL(RetryAttempt, 0) + 1 >= 3, '$now', null)
+    RetryAttempt = IF(:resendOTPClicked, IFNULL(RetryAttempt, 0) + 1, IFNULL(RetryAttempt, 0)),
+    IsLocked = IF(:resendOTPClicked AND IFNULL(RetryAttempt, 0) + 1 >= 3, 1, 0),
+    LockedDateTime = IF(:resendOTPClicked AND IFNULL(RetryAttempt, 0) + 1 >= 3, '$now', NULL),
+    OTP = :otp
   WHERE
     UserEmail = :userEmail
 ")
@@ -82,6 +91,7 @@ updateOTPManagerUser Mutation resolver req.vtl
     }
   ]
 }
+
 
 updateOTPManagerUser Mutation resolver res.vtl
 ===============================================
